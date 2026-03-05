@@ -1,0 +1,700 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Arkay Admin</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<script type="module">
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js';
+import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
+import { getFirestore, doc, getDoc, setDoc, collection, addDoc, getDocs, updateDoc, orderBy, query } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
+
+const firebaseConfig = {
+  apiKey: "AIzaSyC07OsDmXMfBNodLHu20kRFSYHG-Lpb9LY",
+  authDomain: "garagecalculator-7a934.firebaseapp.com",
+  projectId: "garagecalculator-7a934",
+  storageBucket: "garagecalculator-7a934.firebasestorage.app",
+  messagingSenderId: "207450861147",
+  appId: "1:207450861147:web:b675b8227bc90acdc5d97e"
+};
+
+const app  = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db   = getFirestore(app);
+
+// ── DEFAULT RATES ─────────────────────────────────────────────────────────────
+const DEFAULTS = {
+  generalReq:900,site:0.50,concrete4:14.15,concrete6:17.65,
+  framingMat:43.88,framingLab:8.89,roofShingle:5.34,roofSteel:5.80,
+  claddingVinyl:5.29,claddingMetal:5.10,claddingStucco:12.00,
+  soffit:13.25,eave:9.89,winBase:355,manDoorBase:850,misc:1.00,
+  electrical:4.00,heater:3900,insulation:3.50,drywall:3.20,
+  painting:2.80,epoxy:4.50,mgmt:10,gst:5
+};
+const DEFAULT_TRUSS = [[16,950],[18,1035],[20,1125],[22,1225],[24,1350],[26,1500],[28,1725],[30,1950],[32,2225],[36,2700],[40,3250],[44,3775],[48,4300]];
+const DEFAULT_OHD   = [[8,7,1950],[8,8,2050],[9,7,2050],[9,8,2150],[10,7,2100],[10,8,2250],[12,7,2350],[12,8,2550],[14,7,3050],[14,8,3225],[16,7,3650],[16,8,3900],[18,7,4250],[18,8,4450],[20,8,5075],[24,8,6000]];
+
+let hasChanges = false;
+let allLeads   = [];
+let currentTab = 'leads';
+
+// ── AUTH ──────────────────────────────────────────────────────────────────────
+onAuthStateChanged(auth, user => {
+  if (user) {
+    document.getElementById('login-screen').style.display = 'none';
+    document.getElementById('admin-screen').style.display = 'block';
+    loadRates();
+    loadLeads();
+  } else {
+    document.getElementById('login-screen').style.display = 'flex';
+    document.getElementById('admin-screen').style.display = 'none';
+  }
+});
+
+window.doLogin = async function() {
+  const email = document.getElementById('login-email').value;
+  const pw    = document.getElementById('login-pw').value;
+  const err   = document.getElementById('login-error');
+  try {
+    await signInWithEmailAndPassword(auth, email, pw);
+  } catch(e) {
+    err.style.display = 'block';
+    err.textContent = 'Incorrect email or password.';
+    setTimeout(() => err.style.display='none', 3000);
+  }
+};
+
+window.doLogout = async function() {
+  if (hasChanges && !confirm('Unsaved changes. Log out anyway?')) return;
+  await signOut(auth);
+};
+
+// ── TABS ──────────────────────────────────────────────────────────────────────
+window.switchTab = function(tab) {
+  currentTab = tab;
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.tab-panel').forEach(p => p.style.display='none');
+  document.getElementById('tab-' + tab).style.display = 'block';
+  document.querySelector('[data-tab="' + tab + '"]').classList.add('active');
+  document.getElementById('save-btn').style.display = tab === 'pricing' ? 'block' : 'none';
+};
+
+// ── LOAD RATES ────────────────────────────────────────────────────────────────
+async function loadRates() {
+  try {
+    const snap = await getDoc(doc(db, 'config', 'rates'));
+    const data = snap.exists() ? snap.data() : {};
+    const rates = Object.assign({}, DEFAULTS, data.rates || {});
+    // Convert Firestore objects back to arrays
+    const trussRaw = data.truss;
+    const ohdRaw   = data.ohd;
+    const truss = trussRaw && typeof Object.values(trussRaw)[0] === 'object'
+      ? Object.values(trussRaw).sort((a,b)=>a.span-b.span).map(r=>[r.span,r.price])
+      : DEFAULT_TRUSS;
+    const ohd = ohdRaw && typeof Object.values(ohdRaw)[0] === 'object'
+      ? Object.values(ohdRaw).sort((a,b)=>(a.w*100+a.h)-(b.w*100+b.h)).map(r=>[r.w,r.h,r.price])
+      : DEFAULT_OHD;
+    Object.keys(DEFAULTS).forEach(k => {
+      const el = document.getElementById('r-' + k);
+      if (el) el.value = rates[k];
+    });
+    renderTrussTable(truss);
+    renderOhdTable(ohd);
+    setSaveStatus('All changes saved', '');
+    hasChanges = false;
+  } catch(e) {
+    setSaveStatus('Error loading rates', 'error');
+  }
+}
+
+// ── SAVE RATES ────────────────────────────────────────────────────────────────
+window.saveRates = async function() {
+  const btn = document.getElementById('save-btn');
+  btn.disabled = true;
+  btn.textContent = 'Saving...';
+  setSaveStatus('Saving...', 'saving');
+  try {
+    const rates = {};
+    Object.keys(DEFAULTS).forEach(k => {
+      const el = document.getElementById('r-' + k);
+      if (el) rates[k] = parseFloat(el.value) || 0;
+    });
+    const truss = collectTrussRows();
+    const ohd   = collectOhdRows();
+    // Firestore doesn't support nested arrays — convert to objects
+    const trussObj = Object.fromEntries(truss.map((r,i) => [i, {span:r[0], price:r[1]}]));
+    const ohdObj   = Object.fromEntries(ohd.map((r,i)   => [i, {w:r[0], h:r[1], price:r[2]}]));
+    await setDoc(doc(db, 'config', 'rates'), { rates, truss: trussObj, ohd: ohdObj });
+    document.querySelectorAll('.changed').forEach(el => el.classList.remove('changed'));
+    hasChanges = false;
+    setSaveStatus('All changes saved', 'saved');
+    showToast('Rates saved to cloud', 'success');
+  } catch(e) {
+    setSaveStatus('Save failed', 'error');
+    showToast('Save failed: ' + e.message, 'error');
+  }
+  btn.disabled = false;
+  btn.textContent = 'Save Changes';
+};
+
+window.markChanged = function(el) {
+  el.classList.add('changed');
+  hasChanges = true;
+  setSaveStatus('Unsaved changes', 'saving');
+};
+window.markLookupChanged = window.markChanged;
+
+// ── LOAD LEADS ────────────────────────────────────────────────────────────────
+async function loadLeads() {
+  const container = document.getElementById('leads-list');
+  container.innerHTML = '<div class="leads-loading">Loading leads...</div>';
+  try {
+    const q    = query(collection(db, 'leads'), orderBy('submitted_at', 'desc'));
+    const snap = await getDocs(q);
+    allLeads   = [];
+    snap.forEach(d => allLeads.push({ id: d.id, ...d.data() }));
+    renderLeads(allLeads);
+    document.getElementById('lead-count').textContent = allLeads.length + ' leads';
+  } catch(e) {
+    container.innerHTML = '<div class="leads-loading">Error loading leads.</div>';
+  }
+}
+
+function renderLeads(leads) {
+  const container = document.getElementById('leads-list');
+  if (!leads.length) {
+    container.innerHTML = '<div class="leads-empty"><div style="font-size:2rem;margin-bottom:12px;">📭</div><div>No leads yet. Submissions will appear here.</div></div>';
+    return;
+  }
+  container.innerHTML = leads.map(l => `
+    <div class="lead-card" onclick="openLead('${l.id}')">
+      <div class="lead-card-top">
+        <div>
+          <div class="lead-name">${l.name || '—'}</div>
+          <div class="lead-meta">${l.email || ''} ${l.phone ? '· ' + l.phone : ''}</div>
+        </div>
+        <div style="text-align:right;">
+          <div class="lead-estimate">${l.estimate_range || '—'}</div>
+          <span class="lead-status status-${(l.status||'new').toLowerCase()}">${l.status || 'New'}</span>
+        </div>
+      </div>
+      <div class="lead-specs">${l.length||''} × ${l.width||''} × ${l.wall_height||''} · ${l.floor_sqft||''} · ${l.slab||''} · ${l.roofing||''} · ${l.siding||''}</div>
+      <div class="lead-date">${l.submitted_at || ''}</div>
+    </div>
+  `).join('');
+}
+
+// ── OPEN LEAD DETAIL ──────────────────────────────────────────────────────────
+window.openLead = function(id) {
+  const l = allLeads.find(x => x.id === id);
+  if (!l) return;
+  document.getElementById('detail-name').textContent     = l.name || '—';
+  document.getElementById('detail-email').textContent    = l.email || '—';
+  document.getElementById('detail-phone').textContent    = l.phone || '—';
+  document.getElementById('detail-estimate').textContent = l.estimate_range || '—';
+  document.getElementById('detail-sqft').textContent     = l.sqft_rate || '—';
+  document.getElementById('detail-size').textContent     = `${l.length||''} × ${l.width||''} × ${l.wall_height||''}`;
+  document.getElementById('detail-floor').textContent    = l.floor_sqft || '—';
+  document.getElementById('detail-slab').textContent     = l.slab || '—';
+  document.getElementById('detail-roofing').textContent  = l.roofing || '—';
+  document.getElementById('detail-siding').textContent   = l.siding || '—';
+  document.getElementById('detail-doors').textContent    = l.overhead_doors || '—';
+  document.getElementById('detail-windows').textContent  = l.windows || '—';
+  document.getElementById('detail-mandoors').textContent = l.man_doors || '—';
+  document.getElementById('detail-addons').textContent   = l.addons || 'None';
+  document.getElementById('detail-date').textContent     = l.submitted_at || '—';
+  document.getElementById('detail-status').value         = l.status || 'New';
+  document.getElementById('detail-status').dataset.id   = id;
+  document.getElementById('lead-detail-panel').classList.add('open');
+};
+
+window.closeDetail = function() {
+  document.getElementById('lead-detail-panel').classList.remove('open');
+};
+
+window.updateStatus = async function() {
+  const sel    = document.getElementById('detail-status');
+  const id     = sel.dataset.id;
+  const status = sel.value;
+  try {
+    await updateDoc(doc(db, 'leads', id), { status });
+    const lead = allLeads.find(l => l.id === id);
+    if (lead) lead.status = status;
+    renderLeads(allLeads);
+    showToast('Status updated', 'success');
+  } catch(e) {
+    showToast('Update failed', 'error');
+  }
+};
+
+// ── SEARCH / FILTER ───────────────────────────────────────────────────────────
+window.filterLeads = function() {
+  const q      = document.getElementById('lead-search').value.toLowerCase();
+  const status = document.getElementById('lead-filter').value;
+  const filtered = allLeads.filter(l => {
+    const matchQ = !q || (l.name||'').toLowerCase().includes(q) || (l.email||'').toLowerCase().includes(q) || (l.phone||'').includes(q);
+    const matchS = !status || (l.status||'New') === status;
+    return matchQ && matchS;
+  });
+  renderLeads(filtered);
+};
+
+// ── EXPORT TO CSV ─────────────────────────────────────────────────────────────
+window.exportCSV = function() {
+  if (!allLeads.length) { showToast('No leads to export', 'error'); return; }
+  const headers = ['Name','Email','Phone','Estimate','Size','Floor sqft','Slab','Roofing','Siding','Doors','Windows','Man Doors','Add-ons','Status','Submitted'];
+  const rows = allLeads.map(l => [
+    l.name, l.email, l.phone, l.estimate_range,
+    `${l.length} x ${l.width} x ${l.wall_height}`, l.floor_sqft,
+    l.slab, l.roofing, l.siding, l.overhead_doors,
+    l.windows, l.man_doors, l.addons, l.status||'New', l.submitted_at
+  ].map(v => `"${(v||'').replace(/"/g,'""')}"`));
+  const csv  = [headers, ...rows].map(r => r.join(',')).join('\n');
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href     = url;
+  a.download = 'arkay-leads-' + new Date().toISOString().slice(0,10) + '.csv';
+  a.click();
+  URL.revokeObjectURL(url);
+  showToast('CSV downloaded', 'success');
+};
+
+// ── TRUSS TABLE ───────────────────────────────────────────────────────────────
+window.renderTrussTable = function(data) {
+  const tbody = document.getElementById('truss-tbody');
+  tbody.innerHTML = '';
+  data.forEach((row, i) => {
+    const [span, price] = row;
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td><div class="lookup-input-wrap"><input class="lookup-input" type="number" data-truss-span="${i}" value="${span}" step="2" style="padding-left:10px;" onchange="markLookupChanged(this)"></div></td>
+      <td><div class="lookup-input-wrap"><span class="lookup-prefix">$</span><input class="lookup-input" type="number" data-truss-price="${i}" value="${price}" step="25" onchange="markLookupChanged(this)"></div></td>
+      <td class="actions"><button class="remove-btn" onclick="removeTrussRow(this)">×</button></td>`;
+    tbody.appendChild(tr);
+  });
+};
+
+window.collectTrussRows = function() {
+  const rows = [];
+  document.querySelectorAll('#truss-tbody tr').forEach(tr => {
+    const s = tr.querySelector('[data-truss-span]');
+    const p = tr.querySelector('[data-truss-price]');
+    if (s && p && parseFloat(s.value) > 0) rows.push([parseFloat(s.value), parseFloat(p.value)||0]);
+  });
+  return rows.sort((a,b) => a[0]-b[0]);
+};
+
+window.addTrussRow = function() {
+  const rows = collectTrussRows(); rows.push([0,0]);
+  renderTrussTable(rows);
+  const all = document.querySelectorAll('[data-truss-span]');
+  const last = all[all.length-1];
+  if (last) { last.classList.add('new-row'); last.focus(); }
+  hasChanges = true; setSaveStatus('Unsaved changes','saving');
+};
+
+window.removeTrussRow = function(btn) {
+  if (document.querySelectorAll('#truss-tbody tr').length <= 1) { showToast('Need at least one row','error'); return; }
+  const tr = btn.closest('tr');
+  tr.style.opacity='0'; tr.style.transition='opacity 0.2s';
+  setTimeout(() => { tr.remove(); hasChanges=true; setSaveStatus('Unsaved changes','saving'); }, 200);
+};
+
+// ── OHD TABLE ─────────────────────────────────────────────────────────────────
+window.renderOhdTable = function(data) {
+  const tbody = document.getElementById('ohd-tbody');
+  tbody.innerHTML = '';
+  data.forEach((row, i) => {
+    const [w, h, price] = row;
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td><div class="lookup-input-wrap"><input class="lookup-input" type="number" data-ohd-w="${i}" value="${w}" step="1" style="padding-left:10px;" onchange="markLookupChanged(this)"></div></td>
+      <td><div class="lookup-input-wrap"><input class="lookup-input" type="number" data-ohd-h="${i}" value="${h}" step="1" style="padding-left:10px;" onchange="markLookupChanged(this)"></div></td>
+      <td><div class="lookup-input-wrap"><span class="lookup-prefix">$</span><input class="lookup-input" type="number" data-ohd-price="${i}" value="${price}" step="50" onchange="markLookupChanged(this)"></div></td>
+      <td class="actions"><button class="remove-btn" onclick="removeOhdRow(this)">×</button></td>`;
+    tbody.appendChild(tr);
+  });
+};
+
+window.collectOhdRows = function() {
+  const rows = [];
+  document.querySelectorAll('#ohd-tbody tr').forEach(tr => {
+    const w = tr.querySelector('[data-ohd-w]');
+    const h = tr.querySelector('[data-ohd-h]');
+    const p = tr.querySelector('[data-ohd-price]');
+    if (w && h && p && parseFloat(w.value)>0 && parseFloat(h.value)>0) rows.push([parseFloat(w.value),parseFloat(h.value),parseFloat(p.value)||0]);
+  });
+  return rows.sort((a,b) => (a[0]*100+a[1])-(b[0]*100+b[1]));
+};
+
+window.addOhdRow = function() {
+  const rows = collectOhdRows(); rows.push([0,0,0]);
+  renderOhdTable(rows);
+  const all = document.querySelectorAll('[data-ohd-w]');
+  const last = all[all.length-1];
+  if (last) { last.classList.add('new-row'); last.focus(); }
+  hasChanges = true; setSaveStatus('Unsaved changes','saving');
+};
+
+window.removeOhdRow = function(btn) {
+  if (document.querySelectorAll('#ohd-tbody tr').length <= 1) { showToast('Need at least one row','error'); return; }
+  const tr = btn.closest('tr');
+  tr.style.opacity='0'; tr.style.transition='opacity 0.2s';
+  setTimeout(() => { tr.remove(); hasChanges=true; setSaveStatus('Unsaved changes','saving'); }, 200);
+};
+
+// ── UI HELPERS ────────────────────────────────────────────────────────────────
+function setSaveStatus(msg, cls) {
+  const el = document.getElementById('save-status');
+  if (el) { el.textContent = msg; el.className = 'save-status ' + cls; }
+}
+
+window.showToast = function(msg, type) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.className = 'toast ' + type;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 3000);
+};
+
+window.addEventListener('beforeunload', e => { if (hasChanges) { e.preventDefault(); e.returnValue=''; } });
+document.addEventListener('keydown', e => { if (e.key==='Enter' && document.getElementById('login-screen').style.display!=='none') window.doLogin(); });
+</script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --navy:#1a2332;--navy2:#212d40;--orange:#d4601a;--orange2:#c05518;
+  --white:#ffffff;--smoke:#f7f6f4;--stone:#e8e5e1;--ash:#9a9690;--ink:#1a1a1a;
+  --green:#2d7a4f;--red:#c0392b;--radius:8px;--trans:all 0.18s ease;
+}
+html,body{font-family:'DM Sans',sans-serif;background:var(--navy);color:var(--white);min-height:100vh;-webkit-font-smoothing:antialiased;}
+
+/* ── LOGIN ── */
+#login-screen{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;}
+.login-card{background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:16px;padding:48px 40px;width:100%;max-width:380px;text-align:center;}
+.login-logo{font-family:'DM Serif Display',serif;font-size:1.5rem;color:var(--white);margin-bottom:4px;}
+.login-sub{font-size:0.78rem;color:rgba(255,255,255,0.3);letter-spacing:0.1em;text-transform:uppercase;margin-bottom:36px;}
+.login-input{width:100%;padding:14px 16px;background:rgba(255,255,255,0.06);border:1.5px solid rgba(255,255,255,0.1);border-radius:var(--radius);font-family:'DM Sans',sans-serif;font-size:1rem;color:var(--white);outline:none;margin-bottom:14px;transition:var(--trans);}
+.login-input::placeholder{color:rgba(255,255,255,0.2);}
+.login-input:focus{border-color:var(--orange);background:rgba(255,255,255,0.08);}
+.login-btn{width:100%;padding:14px;background:var(--orange);border:none;border-radius:var(--radius);font-family:'DM Sans',sans-serif;font-size:0.95rem;font-weight:600;color:var(--white);cursor:pointer;transition:var(--trans);}
+.login-btn:hover{background:var(--orange2);}
+.login-error{font-size:0.78rem;color:#e74c3c;margin-top:12px;display:none;}
+
+/* ── ADMIN ── */
+#admin-screen{display:none;min-height:100vh;background:var(--smoke);color:var(--ink);}
+
+/* ── HEADER ── */
+.admin-header{background:var(--navy);padding:0 40px;height:64px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100;border-bottom:1px solid rgba(255,255,255,0.06);}
+.admin-header-left{display:flex;align-items:center;gap:16px;}
+.admin-logo{font-family:'DM Serif Display',serif;font-size:1.15rem;color:var(--white);text-decoration:none;}
+.admin-badge{font-size:0.62rem;font-weight:600;letter-spacing:0.12em;text-transform:uppercase;color:var(--orange);background:rgba(212,96,26,0.15);border:1px solid rgba(212,96,26,0.25);border-radius:4px;padding:3px 8px;}
+.admin-header-right{display:flex;align-items:center;gap:12px;}
+.save-status{font-size:0.78rem;color:rgba(255,255,255,0.3);transition:var(--trans);}
+.save-status.saved{color:#2ecc71;}.save-status.saving{color:rgba(255,255,255,0.5);}.save-status.error{color:#e74c3c;}
+.save-btn{padding:9px 24px;background:var(--orange);border:none;border-radius:var(--radius);font-family:'DM Sans',sans-serif;font-size:0.85rem;font-weight:600;color:var(--white);cursor:pointer;transition:var(--trans);}
+.save-btn:hover{background:var(--orange2);}.save-btn:disabled{opacity:0.5;cursor:not-allowed;}
+.logout-btn{padding:9px 16px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:var(--radius);font-family:'DM Sans',sans-serif;font-size:0.82rem;color:rgba(255,255,255,0.4);cursor:pointer;transition:var(--trans);}
+.logout-btn:hover{color:rgba(255,255,255,0.7);}
+
+/* ── TABS ── */
+.admin-tabs{background:var(--navy);border-bottom:1px solid rgba(255,255,255,0.08);padding:0 40px;display:flex;gap:4px;}
+.tab-btn{padding:14px 20px;font-family:'DM Sans',sans-serif;font-size:0.85rem;font-weight:500;color:rgba(255,255,255,0.4);background:none;border:none;cursor:pointer;border-bottom:2px solid transparent;transition:var(--trans);margin-bottom:-1px;}
+.tab-btn:hover{color:rgba(255,255,255,0.7);}
+.tab-btn.active{color:var(--white);border-bottom-color:var(--orange);}
+
+/* ── BODY ── */
+.admin-body{max-width:1000px;margin:0 auto;padding:40px 40px 80px;}
+
+/* ── LEADS ── */
+.leads-toolbar{display:flex;gap:12px;margin-bottom:24px;align-items:center;flex-wrap:wrap;}
+.leads-toolbar-left{display:flex;gap:12px;flex:1;}
+.lead-search{flex:1;padding:10px 14px;border:1.5px solid var(--stone);border-radius:var(--radius);font-family:'DM Sans',sans-serif;font-size:0.9rem;background:var(--white);outline:none;transition:var(--trans);}
+.lead-search:focus{border-color:var(--navy);}
+.lead-filter{padding:10px 14px;border:1.5px solid var(--stone);border-radius:var(--radius);font-family:'DM Sans',sans-serif;font-size:0.9rem;background:var(--white);outline:none;cursor:pointer;}
+.export-btn{padding:10px 20px;background:var(--navy);border:none;border-radius:var(--radius);font-family:'DM Sans',sans-serif;font-size:0.85rem;font-weight:600;color:var(--white);cursor:pointer;transition:var(--trans);white-space:nowrap;}
+.export-btn:hover{background:var(--navy2);}
+.lead-count{font-size:0.8rem;color:var(--ash);}
+.leads-loading{text-align:center;padding:60px;color:var(--ash);font-size:0.9rem;}
+.leads-empty{text-align:center;padding:80px 40px;color:var(--ash);font-size:0.9rem;}
+
+/* ── LEAD CARDS ── */
+.lead-card{background:var(--white);border:1px solid var(--stone);border-radius:10px;padding:18px 20px;margin-bottom:10px;cursor:pointer;transition:var(--trans);}
+.lead-card:hover{border-color:var(--navy);transform:translateY(-1px);box-shadow:0 4px 12px rgba(0,0,0,0.06);}
+.lead-card-top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;}
+.lead-name{font-size:1rem;font-weight:600;color:var(--ink);margin-bottom:2px;}
+.lead-meta{font-size:0.78rem;color:var(--ash);}
+.lead-estimate{font-size:0.95rem;font-weight:600;color:var(--navy);margin-bottom:4px;}
+.lead-specs{font-size:0.78rem;color:var(--ash);margin-bottom:4px;}
+.lead-date{font-size:0.72rem;color:rgba(150,145,140,0.6);}
+.lead-status{font-size:0.65rem;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;padding:3px 8px;border-radius:4px;}
+.status-new{background:rgba(212,96,26,0.1);color:var(--orange);}
+.status-contacted{background:rgba(52,152,219,0.1);color:#2980b9;}
+.status-quoted{background:rgba(155,89,182,0.1);color:#8e44ad;}
+.status-closed{background:rgba(45,122,79,0.1);color:var(--green);}
+
+/* ── LEAD DETAIL PANEL ── */
+.lead-detail-panel{position:fixed;right:-480px;top:0;width:460px;height:100vh;background:var(--white);box-shadow:-4px 0 24px rgba(0,0,0,0.12);z-index:200;transition:right 0.3s cubic-bezier(0.4,0,0.2,1);overflow-y:auto;}
+.lead-detail-panel.open{right:0;}
+.detail-header{background:var(--navy);padding:20px 24px;display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;}
+.detail-title{font-family:'DM Serif Display',serif;font-size:1.1rem;color:var(--white);}
+.detail-close{background:none;border:none;color:rgba(255,255,255,0.4);font-size:1.4rem;cursor:pointer;padding:4px 8px;line-height:1;}
+.detail-close:hover{color:var(--white);}
+.detail-body{padding:24px;}
+.detail-section{margin-bottom:24px;}
+.detail-section-title{font-size:0.7rem;font-weight:600;letter-spacing:0.12em;text-transform:uppercase;color:var(--ash);margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid var(--stone);}
+.detail-row{display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid #f5f4f2;font-size:0.88rem;}
+.detail-row:last-child{border-bottom:none;}
+.detail-label{color:var(--ash);}
+.detail-value{color:var(--ink);font-weight:500;text-align:right;max-width:60%;}
+.detail-estimate-big{font-family:'DM Serif Display',serif;font-size:1.6rem;color:var(--navy);margin-bottom:4px;}
+.status-select{width:100%;padding:10px 14px;border:1.5px solid var(--stone);border-radius:var(--radius);font-family:'DM Sans',sans-serif;font-size:0.9rem;background:var(--white);outline:none;margin-bottom:10px;cursor:pointer;}
+.status-select:focus{border-color:var(--navy);}
+.update-status-btn{width:100%;padding:11px;background:var(--navy);border:none;border-radius:var(--radius);font-family:'DM Sans',sans-serif;font-size:0.88rem;font-weight:600;color:var(--white);cursor:pointer;transition:var(--trans);}
+.update-status-btn:hover{background:var(--navy2);}
+
+/* ── PRICING SECTIONS ── */
+.rate-section{background:var(--white);border:1px solid var(--stone);border-radius:12px;margin-bottom:24px;overflow:hidden;}
+.rate-section-header{padding:18px 24px;background:var(--navy);display:flex;align-items:center;gap:12px;}
+.rate-section-icon{font-size:1rem;width:32px;height:32px;background:rgba(255,255,255,0.08);border-radius:6px;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.rate-section-title{font-family:'DM Serif Display',serif;font-size:1rem;color:var(--white);flex:1;}
+.rate-section-note{font-size:0.72rem;color:rgba(255,255,255,0.3);letter-spacing:0.06em;}
+.rate-table{width:100%;}
+.rate-row{display:grid;grid-template-columns:1fr 180px 140px;align-items:center;padding:14px 24px;border-bottom:1px solid var(--stone);gap:16px;transition:background 0.15s;}
+.rate-row:last-child{border-bottom:none;}
+.rate-row:hover{background:var(--smoke);}
+.rate-label{font-size:0.9rem;font-weight:500;color:var(--ink);}
+.rate-desc{font-size:0.75rem;color:var(--ash);margin-top:2px;line-height:1.4;}
+.rate-unit{font-size:0.72rem;color:var(--ash);background:var(--smoke);border:1px solid var(--stone);border-radius:4px;padding:4px 10px;text-align:center;white-space:nowrap;}
+.rate-input-wrap{position:relative;}
+.rate-prefix{position:absolute;left:12px;top:50%;transform:translateY(-50%);font-size:0.85rem;color:var(--ash);pointer-events:none;}
+.rate-input{width:100%;padding:10px 12px 10px 24px;border:1.5px solid var(--stone);border-radius:var(--radius);font-family:'DM Sans',sans-serif;font-size:0.95rem;font-weight:500;color:var(--ink);background:var(--white);outline:none;transition:var(--trans);text-align:right;}
+.rate-input:focus{border-color:var(--navy);background:var(--smoke);}
+.rate-input.changed{border-color:var(--orange);background:rgba(212,96,26,0.03);}
+.lookup-table{width:100%;border-collapse:collapse;}
+.lookup-table th{padding:10px 24px;font-size:0.72rem;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:var(--ash);background:var(--smoke);text-align:left;border-bottom:1px solid var(--stone);}
+.lookup-table td{padding:11px 24px;border-bottom:1px solid var(--stone);font-size:0.88rem;}
+.lookup-table tr:last-child td{border-bottom:none;}
+.lookup-table tr:hover td{background:var(--smoke);}
+.lookup-input-wrap{position:relative;display:inline-block;}
+.lookup-prefix{position:absolute;left:8px;top:50%;transform:translateY(-50%);font-size:0.8rem;color:var(--ash);pointer-events:none;}
+.lookup-input{width:100px;padding:7px 10px 7px 20px;border:1.5px solid var(--stone);border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;font-weight:500;color:var(--ink);background:var(--white);outline:none;transition:var(--trans);text-align:right;}
+.lookup-input:focus{border-color:var(--navy);}
+.lookup-input.changed{border-color:var(--orange);}
+.lookup-table td.actions{text-align:center;padding:8px 12px;}
+.add-row-bar{padding:14px 24px;border-top:1px solid var(--stone);background:var(--smoke);}
+.add-row-btn{background:none;border:1.5px dashed var(--stone);border-radius:var(--radius);padding:8px 18px;font-family:'DM Sans',sans-serif;font-size:0.82rem;font-weight:500;color:var(--ash);cursor:pointer;transition:var(--trans);}
+.add-row-btn:hover{border-color:var(--navy);color:var(--navy);background:var(--white);}
+.remove-btn{width:28px;height:28px;border:1.5px solid var(--stone);border-radius:50%;background:var(--white);color:var(--ash);font-size:1rem;cursor:pointer;transition:var(--trans);display:flex;align-items:center;justify-content:center;font-family:'DM Sans',sans-serif;}
+.remove-btn:hover{border-color:var(--red);color:var(--red);}
+
+/* ── TOAST ── */
+.toast{position:fixed;bottom:32px;right:32px;padding:14px 20px;border-radius:10px;font-size:0.88rem;font-weight:500;color:white;z-index:999;opacity:0;transform:translateY(8px);transition:all 0.3s cubic-bezier(0.4,0,0.2,1);pointer-events:none;}
+.toast.show{opacity:1;transform:translateY(0);}
+.toast.success{background:var(--green);}.toast.error{background:var(--red);}
+
+@media(max-width:640px){
+  .admin-header{padding:0 16px;}
+  .admin-tabs{padding:0 16px;}
+  .admin-body{padding:20px 16px 60px;}
+  .rate-row{grid-template-columns:1fr 100px;}.rate-unit{display:none;}
+  .lead-detail-panel{width:100%;right:-100%;}
+}
+</style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="login-screen">
+  <div class="login-card">
+    <div class="login-logo">Arkay Garage Co.</div>
+    <div class="login-sub">Admin Portal</div>
+    <input class="login-input" type="email" id="login-email" placeholder="Email address">
+    <input class="login-input" type="password" id="login-pw" placeholder="Password">
+    <button class="login-btn" onclick="doLogin()">Sign In</button>
+    <div class="login-error" id="login-error"></div>
+  </div>
+</div>
+
+<!-- ADMIN -->
+<div id="admin-screen">
+  <div class="admin-header">
+    <div class="admin-header-left">
+      <a href="index.html" class="admin-logo">Arkay Garage Co.</a>
+      <div class="admin-badge">Admin</div>
+    </div>
+    <div class="admin-header-right">
+      <span class="save-status" id="save-status"></span>
+      <button class="save-btn" id="save-btn" onclick="saveRates()" style="display:none;">Save Changes</button>
+      <button class="logout-btn" onclick="doLogout()">Log out</button>
+    </div>
+  </div>
+
+  <div class="admin-tabs">
+    <button class="tab-btn active" data-tab="leads" onclick="switchTab('leads')">📥 Leads</button>
+    <button class="tab-btn" data-tab="pricing" onclick="switchTab('pricing')">💲 Pricing</button>
+  </div>
+
+  <!-- LEADS TAB -->
+  <div class="admin-body tab-panel" id="tab-leads">
+    <div class="leads-toolbar">
+      <div class="leads-toolbar-left">
+        <input class="lead-search" id="lead-search" type="text" placeholder="Search by name, email or phone..." oninput="filterLeads()">
+        <select class="lead-filter" id="lead-filter" onchange="filterLeads()">
+          <option value="">All Status</option>
+          <option value="New">New</option>
+          <option value="Contacted">Contacted</option>
+          <option value="Quoted">Quoted</option>
+          <option value="Closed">Closed</option>
+        </select>
+      </div>
+      <span class="lead-count" id="lead-count"></span>
+      <button class="export-btn" onclick="exportCSV()">↓ Export CSV</button>
+    </div>
+    <div id="leads-list"></div>
+  </div>
+
+  <!-- PRICING TAB -->
+  <div class="admin-body tab-panel" id="tab-pricing" style="display:none;">
+
+    <div class="rate-section">
+      <div class="rate-section-header"><div class="rate-section-icon">📋</div><div class="rate-section-title">General & Site</div><div class="rate-section-note">Flat amounts</div></div>
+      <div class="rate-table">
+        <div class="rate-row"><div><div class="rate-label">General Requirements</div><div class="rate-desc">Permits, engineered drawings, project setup</div></div><div class="rate-unit">$ flat / job</div><div class="rate-input-wrap"><span class="rate-prefix">$</span><input class="rate-input" type="number" id="r-generalReq" step="50" onchange="markChanged(this)"></div></div>
+        <div class="rate-row"><div><div class="rate-label">Site Preparation</div><div class="rate-desc">Clearing, levelling, layout</div></div><div class="rate-unit">$ / sqft floor</div><div class="rate-input-wrap"><span class="rate-prefix">$</span><input class="rate-input" type="number" id="r-site" step="0.05" onchange="markChanged(this)"></div></div>
+        <div class="rate-row"><div><div class="rate-label">Miscellaneous</div><div class="rate-desc">Fasteners, supplies, consumables</div></div><div class="rate-unit">$ / sqft floor</div><div class="rate-input-wrap"><span class="rate-prefix">$</span><input class="rate-input" type="number" id="r-misc" step="0.05" onchange="markChanged(this)"></div></div>
+      </div>
+    </div>
+
+    <div class="rate-section">
+      <div class="rate-section-header"><div class="rate-section-icon">🏗️</div><div class="rate-section-title">Concrete Slab</div><div class="rate-section-note">All-in supply + labour</div></div>
+      <div class="rate-table">
+        <div class="rate-row"><div><div class="rate-label">4" Slab</div><div class="rate-desc">Standard residential</div></div><div class="rate-unit">$ / sqft floor</div><div class="rate-input-wrap"><span class="rate-prefix">$</span><input class="rate-input" type="number" id="r-concrete4" step="0.25" onchange="markChanged(this)"></div></div>
+        <div class="rate-row"><div><div class="rate-label">6" Slab</div><div class="rate-desc">Heavy duty</div></div><div class="rate-unit">$ / sqft floor</div><div class="rate-input-wrap"><span class="rate-prefix">$</span><input class="rate-input" type="number" id="r-concrete6" step="0.25" onchange="markChanged(this)"></div></div>
+      </div>
+    </div>
+
+    <div class="rate-section">
+      <div class="rate-section-header"><div class="rate-section-icon">🪵</div><div class="rate-section-title">Framing</div><div class="rate-section-note">Materials + Labour separate</div></div>
+      <div class="rate-table">
+        <div class="rate-row"><div><div class="rate-label">Framing Materials</div><div class="rate-desc">Lumber, sheathing, hardware</div></div><div class="rate-unit">$ / sqft floor</div><div class="rate-input-wrap"><span class="rate-prefix">$</span><input class="rate-input" type="number" id="r-framingMat" step="0.25" onchange="markChanged(this)"></div></div>
+        <div class="rate-row"><div><div class="rate-label">Framing Labour</div><div class="rate-desc">Walls, headers, blocking</div></div><div class="rate-unit">$ / sqft floor</div><div class="rate-input-wrap"><span class="rate-prefix">$</span><input class="rate-input" type="number" id="r-framingLab" step="0.25" onchange="markChanged(this)"></div></div>
+      </div>
+    </div>
+
+    <div class="rate-section">
+      <div class="rate-section-header"><div class="rate-section-icon">🏠</div><div class="rate-section-title">Roofing</div><div class="rate-section-note">$ / sqft roof area</div></div>
+      <div class="rate-table">
+        <div class="rate-row"><div><div class="rate-label">Asphalt Shingles</div><div class="rate-desc">Supply and install</div></div><div class="rate-unit">$ / sqft roof</div><div class="rate-input-wrap"><span class="rate-prefix">$</span><input class="rate-input" type="number" id="r-roofShingle" step="0.10" onchange="markChanged(this)"></div></div>
+        <div class="rate-row"><div><div class="rate-label">Steel Roofing</div><div class="rate-desc">Supply and install</div></div><div class="rate-unit">$ / sqft roof</div><div class="rate-input-wrap"><span class="rate-prefix">$</span><input class="rate-input" type="number" id="r-roofSteel" step="0.10" onchange="markChanged(this)"></div></div>
+      </div>
+    </div>
+
+    <div class="rate-section">
+      <div class="rate-section-header"><div class="rate-section-icon">🧱</div><div class="rate-section-title">Exterior Cladding</div><div class="rate-section-note">$ / sqft wall + gable</div></div>
+      <div class="rate-table">
+        <div class="rate-row"><div><div class="rate-label">Vinyl Siding</div></div><div class="rate-unit">$ / sqft wall</div><div class="rate-input-wrap"><span class="rate-prefix">$</span><input class="rate-input" type="number" id="r-claddingVinyl" step="0.10" onchange="markChanged(this)"></div></div>
+        <div class="rate-row"><div><div class="rate-label">Metal Siding</div></div><div class="rate-unit">$ / sqft wall</div><div class="rate-input-wrap"><span class="rate-prefix">$</span><input class="rate-input" type="number" id="r-claddingMetal" step="0.10" onchange="markChanged(this)"></div></div>
+        <div class="rate-row"><div><div class="rate-label">Stucco</div></div><div class="rate-unit">$ / sqft wall</div><div class="rate-input-wrap"><span class="rate-prefix">$</span><input class="rate-input" type="number" id="r-claddingStucco" step="0.25" onchange="markChanged(this)"></div></div>
+        <div class="rate-row"><div><div class="rate-label">Soffit & Fascia</div></div><div class="rate-unit">$ / linft</div><div class="rate-input-wrap"><span class="rate-prefix">$</span><input class="rate-input" type="number" id="r-soffit" step="0.25" onchange="markChanged(this)"></div></div>
+        <div class="rate-row"><div><div class="rate-label">Eavestrough</div></div><div class="rate-unit">$ / linft</div><div class="rate-input-wrap"><span class="rate-prefix">$</span><input class="rate-input" type="number" id="r-eave" step="0.25" onchange="markChanged(this)"></div></div>
+      </div>
+    </div>
+
+    <div class="rate-section">
+      <div class="rate-section-header"><div class="rate-section-icon">🚪</div><div class="rate-section-title">Windows & Doors</div><div class="rate-section-note">$ per unit</div></div>
+      <div class="rate-table">
+        <div class="rate-row"><div><div class="rate-label">Window (36×24)</div></div><div class="rate-unit">$ each</div><div class="rate-input-wrap"><span class="rate-prefix">$</span><input class="rate-input" type="number" id="r-winBase" step="25" onchange="markChanged(this)"></div></div>
+        <div class="rate-row"><div><div class="rate-label">Man Door (36×80)</div></div><div class="rate-unit">$ each</div><div class="rate-input-wrap"><span class="rate-prefix">$</span><input class="rate-input" type="number" id="r-manDoorBase" step="25" onchange="markChanged(this)"></div></div>
+      </div>
+    </div>
+
+    <div class="rate-section">
+      <div class="rate-section-header"><div class="rate-section-icon">⚡</div><div class="rate-section-title">Optional Add-Ons</div><div class="rate-section-note">Applied when selected</div></div>
+      <div class="rate-table">
+        <div class="rate-row"><div><div class="rate-label">Electrical Rough-In</div></div><div class="rate-unit">$ / sqft floor</div><div class="rate-input-wrap"><span class="rate-prefix">$</span><input class="rate-input" type="number" id="r-electrical" step="0.25" onchange="markChanged(this)"></div></div>
+        <div class="rate-row"><div><div class="rate-label">Heater</div></div><div class="rate-unit">$ flat / job</div><div class="rate-input-wrap"><span class="rate-prefix">$</span><input class="rate-input" type="number" id="r-heater" step="100" onchange="markChanged(this)"></div></div>
+        <div class="rate-row"><div><div class="rate-label">Insulation</div></div><div class="rate-unit">$ / sqft</div><div class="rate-input-wrap"><span class="rate-prefix">$</span><input class="rate-input" type="number" id="r-insulation" step="0.10" onchange="markChanged(this)"></div></div>
+        <div class="rate-row"><div><div class="rate-label">Drywall</div></div><div class="rate-unit">$ / sqft wall</div><div class="rate-input-wrap"><span class="rate-prefix">$</span><input class="rate-input" type="number" id="r-drywall" step="0.10" onchange="markChanged(this)"></div></div>
+        <div class="rate-row"><div><div class="rate-label">Painting</div></div><div class="rate-unit">$ / sqft wall</div><div class="rate-input-wrap"><span class="rate-prefix">$</span><input class="rate-input" type="number" id="r-painting" step="0.10" onchange="markChanged(this)"></div></div>
+        <div class="rate-row"><div><div class="rate-label">Epoxy Floor</div></div><div class="rate-unit">$ / sqft floor</div><div class="rate-input-wrap"><span class="rate-prefix">$</span><input class="rate-input" type="number" id="r-epoxy" step="0.25" onchange="markChanged(this)"></div></div>
+      </div>
+    </div>
+
+    <div class="rate-section">
+      <div class="rate-section-header"><div class="rate-section-icon">🔒</div><div class="rate-section-title">Margins & Tax</div><div class="rate-section-note">Hidden from client</div></div>
+      <div class="rate-table">
+        <div class="rate-row"><div><div class="rate-label">Management Fee</div><div class="rate-desc">Not shown to client</div></div><div class="rate-unit">% of subtotal</div><div class="rate-input-wrap"><span class="rate-prefix" style="left:unset;right:12px;">%</span><input class="rate-input" type="number" id="r-mgmt" step="1" style="padding-right:28px;padding-left:12px;" onchange="markChanged(this)"></div></div>
+        <div class="rate-row"><div><div class="rate-label">GST</div></div><div class="rate-unit">%</div><div class="rate-input-wrap"><span class="rate-prefix" style="left:unset;right:12px;">%</span><input class="rate-input" type="number" id="r-gst" step="1" style="padding-right:28px;padding-left:12px;" onchange="markChanged(this)"></div></div>
+      </div>
+    </div>
+
+    <div class="rate-section">
+      <div class="rate-section-header"><div class="rate-section-icon">📐</div><div class="rate-section-title">Truss Pricing</div><div class="rate-section-note">By building width</div></div>
+      <table class="lookup-table">
+        <thead><tr><th>Width (ft)</th><th>Price per Set</th><th style="width:48px;"></th></tr></thead>
+        <tbody id="truss-tbody"></tbody>
+      </table>
+      <div class="add-row-bar"><button class="add-row-btn" onclick="addTrussRow()">+ Add Size</button></div>
+    </div>
+
+    <div class="rate-section">
+      <div class="rate-section-header"><div class="rate-section-icon">🚗</div><div class="rate-section-title">Overhead Door Pricing</div><div class="rate-section-note">By width × height</div></div>
+      <table class="lookup-table">
+        <thead><tr><th>Width (ft)</th><th>Height (ft)</th><th>Price</th><th style="width:48px;"></th></tr></thead>
+        <tbody id="ohd-tbody"></tbody>
+      </table>
+      <div class="add-row-bar"><button class="add-row-btn" onclick="addOhdRow()">+ Add Size</button></div>
+    </div>
+
+  </div>
+</div>
+
+<!-- LEAD DETAIL PANEL -->
+<div class="lead-detail-panel" id="lead-detail-panel">
+  <div class="detail-header">
+    <div class="detail-title">Lead Details</div>
+    <button class="detail-close" onclick="closeDetail()">×</button>
+  </div>
+  <div class="detail-body">
+    <div class="detail-section">
+      <div class="detail-estimate-big" id="detail-estimate">—</div>
+      <div style="font-size:0.82rem;color:var(--ash);" id="detail-sqft">—</div>
+    </div>
+    <div class="detail-section">
+      <div class="detail-section-title">Contact</div>
+      <div class="detail-row"><span class="detail-label">Name</span><span class="detail-value" id="detail-name">—</span></div>
+      <div class="detail-row"><span class="detail-label">Email</span><span class="detail-value" id="detail-email">—</span></div>
+      <div class="detail-row"><span class="detail-label">Phone</span><span class="detail-value" id="detail-phone">—</span></div>
+      <div class="detail-row"><span class="detail-label">Submitted</span><span class="detail-value" id="detail-date">—</span></div>
+    </div>
+    <div class="detail-section">
+      <div class="detail-section-title">Building Specs</div>
+      <div class="detail-row"><span class="detail-label">Size</span><span class="detail-value" id="detail-size">—</span></div>
+      <div class="detail-row"><span class="detail-label">Floor Area</span><span class="detail-value" id="detail-floor">—</span></div>
+      <div class="detail-row"><span class="detail-label">Foundation</span><span class="detail-value" id="detail-slab">—</span></div>
+      <div class="detail-row"><span class="detail-label">Roofing</span><span class="detail-value" id="detail-roofing">—</span></div>
+      <div class="detail-row"><span class="detail-label">Siding</span><span class="detail-value" id="detail-siding">—</span></div>
+      <div class="detail-row"><span class="detail-label">Overhead Doors</span><span class="detail-value" id="detail-doors">—</span></div>
+      <div class="detail-row"><span class="detail-label">Windows</span><span class="detail-value" id="detail-windows">—</span></div>
+      <div class="detail-row"><span class="detail-label">Man Doors</span><span class="detail-value" id="detail-mandoors">—</span></div>
+      <div class="detail-row"><span class="detail-label">Add-Ons</span><span class="detail-value" id="detail-addons">—</span></div>
+    </div>
+    <div class="detail-section">
+      <div class="detail-section-title">Status</div>
+      <select class="status-select" id="detail-status">
+        <option value="New">New</option>
+        <option value="Contacted">Contacted</option>
+        <option value="Quoted">Quoted</option>
+        <option value="Closed">Closed</option>
+      </select>
+      <button class="update-status-btn" onclick="updateStatus()">Update Status</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+</body>
+</html>
