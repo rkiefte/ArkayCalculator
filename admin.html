@@ -1,0 +1,1301 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Arkay Admin · Pricing</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --navy:   #1a2332;
+  --navy2:  #212d40;
+  --orange: #d4601a;
+  --orange2:#c05518;
+  --white:  #ffffff;
+  --smoke:  #f7f6f4;
+  --stone:  #e8e5e1;
+  --ash:    #9a9690;
+  --ink:    #1a1a1a;
+  --green:  #2d7a4f;
+  --red:    #c0392b;
+  --radius: 8px;
+  --trans:  all 0.18s ease;
+}
+
+html, body {
+  font-family: 'DM Sans', sans-serif;
+  background: var(--navy);
+  color: var(--white);
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── LOGIN SCREEN ── */
+#login-screen {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: var(--navy);
+}
+
+.login-card {
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 16px;
+  padding: 48px 40px;
+  width: 100%;
+  max-width: 380px;
+  text-align: center;
+}
+
+.login-logo {
+  font-family: 'DM Serif Display', serif;
+  font-size: 1.5rem;
+  color: var(--white);
+  margin-bottom: 4px;
+}
+
+.login-sub {
+  font-size: 0.78rem;
+  color: rgba(255,255,255,0.3);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  margin-bottom: 36px;
+}
+
+.login-input {
+  width: 100%;
+  padding: 14px 16px;
+  background: rgba(255,255,255,0.06);
+  border: 1.5px solid rgba(255,255,255,0.1);
+  border-radius: var(--radius);
+  font-family: 'DM Sans', sans-serif;
+  font-size: 1rem;
+  color: var(--white);
+  outline: none;
+  margin-bottom: 14px;
+  text-align: center;
+  letter-spacing: 0.15em;
+  transition: var(--trans);
+}
+
+.login-input::placeholder {
+  color: rgba(255,255,255,0.2);
+  letter-spacing: 0.05em;
+}
+
+.login-input:focus {
+  border-color: var(--orange);
+  background: rgba(255,255,255,0.08);
+}
+
+.login-btn {
+  width: 100%;
+  padding: 14px;
+  background: var(--orange);
+  border: none;
+  border-radius: var(--radius);
+  font-family: 'DM Sans', sans-serif;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--white);
+  cursor: pointer;
+  transition: var(--trans);
+  letter-spacing: 0.02em;
+}
+
+.login-btn:hover { background: var(--orange2); }
+
+.login-error {
+  font-size: 0.78rem;
+  color: #e74c3c;
+  margin-top: 12px;
+  display: none;
+}
+
+/* ── ADMIN SCREEN ── */
+#admin-screen {
+  display: none;
+  min-height: 100vh;
+  background: var(--smoke);
+  color: var(--ink);
+}
+
+/* ── ADMIN HEADER ── */
+.admin-header {
+  background: var(--navy);
+  padding: 0 40px;
+  height: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+
+.admin-header-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.admin-logo {
+  font-family: 'DM Serif Display', serif;
+  font-size: 1.15rem;
+  color: var(--white);
+}
+
+.admin-badge {
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--orange);
+  background: rgba(212,96,26,0.15);
+  border: 1px solid rgba(212,96,26,0.25);
+  border-radius: 4px;
+  padding: 3px 8px;
+}
+
+.admin-header-right {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.save-status {
+  font-size: 0.78rem;
+  color: rgba(255,255,255,0.3);
+  transition: var(--trans);
+}
+
+.save-status.saved { color: #2ecc71; }
+.save-status.saving { color: rgba(255,255,255,0.5); }
+.save-status.error { color: #e74c3c; }
+
+.save-btn {
+  padding: 9px 24px;
+  background: var(--orange);
+  border: none;
+  border-radius: var(--radius);
+  font-family: 'DM Sans', sans-serif;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--white);
+  cursor: pointer;
+  transition: var(--trans);
+  letter-spacing: 0.02em;
+}
+
+.save-btn:hover { background: var(--orange2); }
+.save-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.logout-btn {
+  padding: 9px 16px;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: var(--radius);
+  font-family: 'DM Sans', sans-serif;
+  font-size: 0.82rem;
+  color: rgba(255,255,255,0.4);
+  cursor: pointer;
+  transition: var(--trans);
+}
+
+.logout-btn:hover { color: rgba(255,255,255,0.7); }
+
+/* ── ADMIN BODY ── */
+.admin-body {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 40px 40px 80px;
+}
+
+.admin-intro {
+  margin-bottom: 36px;
+}
+
+.admin-title {
+  font-family: 'DM Serif Display', serif;
+  font-size: 1.8rem;
+  color: var(--navy);
+  margin-bottom: 6px;
+}
+
+.admin-desc {
+  font-size: 0.85rem;
+  color: var(--ash);
+  line-height: 1.6;
+}
+
+/* ── SECTION CARDS ── */
+.rate-section {
+  background: var(--white);
+  border: 1px solid var(--stone);
+  border-radius: 12px;
+  margin-bottom: 24px;
+  overflow: hidden;
+}
+
+.rate-section-header {
+  padding: 18px 24px;
+  background: var(--navy);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.rate-section-icon {
+  font-size: 1rem;
+  width: 32px;
+  height: 32px;
+  background: rgba(255,255,255,0.08);
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.rate-section-title {
+  font-family: 'DM Serif Display', serif;
+  font-size: 1rem;
+  color: var(--white);
+  flex: 1;
+}
+
+.rate-section-note {
+  font-size: 0.72rem;
+  color: rgba(255,255,255,0.3);
+  letter-spacing: 0.06em;
+}
+
+/* ── RATE ROWS ── */
+.rate-table {
+  width: 100%;
+}
+
+.rate-row {
+  display: grid;
+  grid-template-columns: 1fr 180px 140px;
+  align-items: center;
+  padding: 14px 24px;
+  border-bottom: 1px solid var(--stone);
+  gap: 16px;
+  transition: background 0.15s;
+}
+
+.rate-row:last-child { border-bottom: none; }
+.rate-row:hover { background: var(--smoke); }
+
+.rate-label {
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--ink);
+}
+
+.rate-desc {
+  font-size: 0.75rem;
+  color: var(--ash);
+  margin-top: 2px;
+  line-height: 1.4;
+}
+
+.rate-unit {
+  font-size: 0.72rem;
+  color: var(--ash);
+  background: var(--smoke);
+  border: 1px solid var(--stone);
+  border-radius: 4px;
+  padding: 4px 10px;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.rate-input-wrap {
+  position: relative;
+}
+
+.rate-prefix {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 0.85rem;
+  color: var(--ash);
+  pointer-events: none;
+}
+
+.rate-input {
+  width: 100%;
+  padding: 10px 12px 10px 24px;
+  border: 1.5px solid var(--stone);
+  border-radius: var(--radius);
+  font-family: 'DM Sans', sans-serif;
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: var(--ink);
+  background: var(--white);
+  outline: none;
+  transition: var(--trans);
+  text-align: right;
+}
+
+.rate-input:focus {
+  border-color: var(--navy);
+  background: var(--smoke);
+}
+
+.rate-input.changed {
+  border-color: var(--orange);
+  background: rgba(212,96,26,0.03);
+}
+
+/* ── LOOKUP TABLES ── */
+.lookup-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.lookup-table th {
+  padding: 10px 24px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ash);
+  background: var(--smoke);
+  text-align: left;
+  border-bottom: 1px solid var(--stone);
+}
+
+.lookup-table td {
+  padding: 11px 24px;
+  border-bottom: 1px solid var(--stone);
+  font-size: 0.88rem;
+}
+
+.lookup-table tr:last-child td { border-bottom: none; }
+.lookup-table tr:hover td { background: var(--smoke); }
+
+.lookup-table td.dim {
+  color: var(--ash);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.82rem;
+}
+
+.lookup-input {
+  width: 100px;
+  padding: 7px 10px 7px 20px;
+  border: 1.5px solid var(--stone);
+  border-radius: 6px;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--ink);
+  background: var(--white);
+  outline: none;
+  transition: var(--trans);
+  text-align: right;
+  position: relative;
+}
+
+.lookup-input:focus { border-color: var(--navy); }
+.lookup-input.changed { border-color: var(--orange); }
+
+.lookup-input-wrap {
+  position: relative;
+  display: inline-block;
+}
+
+.lookup-prefix {
+  position: absolute;
+  left: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 0.8rem;
+  color: var(--ash);
+  pointer-events: none;
+}
+
+/* ── ADD ROW / REMOVE ── */
+.add-row-bar {
+  padding: 14px 24px;
+  border-top: 1px solid var(--stone);
+  background: var(--smoke);
+}
+
+.add-row-btn {
+  background: none;
+  border: 1.5px dashed var(--stone);
+  border-radius: var(--radius);
+  padding: 8px 18px;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: var(--ash);
+  cursor: pointer;
+  transition: var(--trans);
+}
+
+.add-row-btn:hover {
+  border-color: var(--navy);
+  color: var(--navy);
+  background: var(--white);
+}
+
+.remove-btn {
+  width: 28px;
+  height: 28px;
+  border: 1.5px solid var(--stone);
+  border-radius: 50%;
+  background: var(--white);
+  color: var(--ash);
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+  transition: var(--trans);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'DM Sans', sans-serif;
+  flex-shrink: 0;
+}
+
+.remove-btn:hover {
+  border-color: var(--red);
+  color: var(--red);
+  background: rgba(192,57,43,0.05);
+}
+
+.lookup-table td.actions {
+  text-align: center;
+  padding: 8px 12px;
+}
+
+.lookup-input.new-row {
+  border-color: var(--orange);
+  background: rgba(212,96,26,0.03);
+}
+
+/* ── TOAST ── */
+.toast {
+  position: fixed;
+  bottom: 32px;
+  right: 32px;
+  padding: 14px 20px;
+  border-radius: 10px;
+  font-size: 0.88rem;
+  font-weight: 500;
+  color: white;
+  z-index: 999;
+  opacity: 0;
+  transform: translateY(8px);
+  transition: all 0.3s cubic-bezier(0.4,0,0.2,1);
+  pointer-events: none;
+}
+
+.toast.show {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.toast.success { background: var(--green); }
+.toast.error   { background: var(--red); }
+
+/* ── RESPONSIVE ── */
+@media (max-width: 640px) {
+  .admin-header { padding: 0 20px; }
+  .admin-body { padding: 24px 16px 60px; }
+  .rate-row { grid-template-columns: 1fr 100px; }
+  .rate-unit { display: none; }
+  .admin-title { font-size: 1.4rem; }
+}
+</style>
+</head>
+<body>
+
+<!-- ── LOGIN ── -->
+<div id="login-screen">
+  <div class="login-card">
+    <div class="login-logo">Arkay Garage Co.</div>
+    <div class="login-sub">Admin · Pricing</div>
+    <input class="login-input" type="password" id="pw-input" placeholder="Enter password" onkeydown="if(event.key==='Enter')doLogin()">
+    <button class="login-btn" onclick="doLogin()">Sign In</button>
+    <div class="login-error" id="login-error">Incorrect password. Try again.</div>
+  </div>
+</div>
+
+<!-- ── ADMIN ── -->
+<div id="admin-screen">
+
+  <div class="admin-header">
+    <div class="admin-header-left">
+      <a href="index.html" class="admin-logo" style="text-decoration:none; color:#ffffff;">Arkay Garage Co.</a>
+      <div class="admin-badge">Admin</div>
+    </div>
+    <div class="admin-header-right">
+      <span class="save-status" id="save-status">All changes saved</span>
+      <button class="save-btn" id="save-btn" onclick="saveRates()">Save Changes</button>
+      <button class="logout-btn" onclick="doLogout()">Log out</button>
+    </div>
+  </div>
+
+  <div class="admin-body">
+
+    <div class="admin-intro">
+      <div class="admin-title">Unit Pricing</div>
+      <div class="admin-desc">All rates feed directly into the client-facing calculator. Changes take effect immediately after saving. Fields highlighted in orange have unsaved changes.</div>
+    </div>
+
+    <!-- ── SECTION 1: GENERAL ── -->
+    <div class="rate-section">
+      <div class="rate-section-header">
+        <div class="rate-section-icon">📋</div>
+        <div class="rate-section-title">General & Site</div>
+        <div class="rate-section-note">Flat amounts</div>
+      </div>
+      <div class="rate-table">
+        <div class="rate-row">
+          <div>
+            <div class="rate-label">General Requirements</div>
+            <div class="rate-desc">Permits, engineered drawings, project setup</div>
+          </div>
+          <div class="rate-unit">$ flat / job</div>
+          <div class="rate-input-wrap">
+            <span class="rate-prefix">$</span>
+            <input class="rate-input" type="number" id="r-generalReq" step="50" onchange="markChanged(this)">
+          </div>
+        </div>
+        <div class="rate-row">
+          <div>
+            <div class="rate-label">Site Preparation</div>
+            <div class="rate-desc">Clearing, levelling, layout</div>
+          </div>
+          <div class="rate-unit">$ / sqft floor</div>
+          <div class="rate-input-wrap">
+            <span class="rate-prefix">$</span>
+            <input class="rate-input" type="number" id="r-site" step="0.05" onchange="markChanged(this)">
+          </div>
+        </div>
+        <div class="rate-row">
+          <div>
+            <div class="rate-label">Miscellaneous</div>
+            <div class="rate-desc">Fasteners, supplies, consumables</div>
+          </div>
+          <div class="rate-unit">$ / sqft floor</div>
+          <div class="rate-input-wrap">
+            <span class="rate-prefix">$</span>
+            <input class="rate-input" type="number" id="r-misc" step="0.05" onchange="markChanged(this)">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── SECTION 2: CONCRETE ── -->
+    <div class="rate-section">
+      <div class="rate-section-header">
+        <div class="rate-section-icon">🏗️</div>
+        <div class="rate-section-title">Concrete Slab</div>
+        <div class="rate-section-note">All-in supply + labour</div>
+      </div>
+      <div class="rate-table">
+        <div class="rate-row">
+          <div>
+            <div class="rate-label">4" Slab</div>
+            <div class="rate-desc">Standard residential — supply, pour, finish</div>
+          </div>
+          <div class="rate-unit">$ / sqft floor</div>
+          <div class="rate-input-wrap">
+            <span class="rate-prefix">$</span>
+            <input class="rate-input" type="number" id="r-concrete4" step="0.25" onchange="markChanged(this)">
+          </div>
+        </div>
+        <div class="rate-row">
+          <div>
+            <div class="rate-label">6" Slab</div>
+            <div class="rate-desc">Heavy duty — supply, pour, finish</div>
+          </div>
+          <div class="rate-unit">$ / sqft floor</div>
+          <div class="rate-input-wrap">
+            <span class="rate-prefix">$</span>
+            <input class="rate-input" type="number" id="r-concrete6" step="0.25" onchange="markChanged(this)">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── SECTION 3: FRAMING ── -->
+    <div class="rate-section">
+      <div class="rate-section-header">
+        <div class="rate-section-icon">🪵</div>
+        <div class="rate-section-title">Framing</div>
+        <div class="rate-section-note">Materials + Labour separate</div>
+      </div>
+      <div class="rate-table">
+        <div class="rate-row">
+          <div>
+            <div class="rate-label">Framing Materials</div>
+            <div class="rate-desc">Lumber, sheathing, hardware, fasteners</div>
+          </div>
+          <div class="rate-unit">$ / sqft floor</div>
+          <div class="rate-input-wrap">
+            <span class="rate-prefix">$</span>
+            <input class="rate-input" type="number" id="r-framingMat" step="0.25" onchange="markChanged(this)">
+          </div>
+        </div>
+        <div class="rate-row">
+          <div>
+            <div class="rate-label">Framing Labour</div>
+            <div class="rate-desc">Walls, headers, blocking, sheathing</div>
+          </div>
+          <div class="rate-unit">$ / sqft floor</div>
+          <div class="rate-input-wrap">
+            <span class="rate-prefix">$</span>
+            <input class="rate-input" type="number" id="r-framingLab" step="0.25" onchange="markChanged(this)">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── SECTION 4: ROOFING ── -->
+    <div class="rate-section">
+      <div class="rate-section-header">
+        <div class="rate-section-icon">🏠</div>
+        <div class="rate-section-title">Roofing</div>
+        <div class="rate-section-note">$ / sqft roof area</div>
+      </div>
+      <div class="rate-table">
+        <div class="rate-row">
+          <div>
+            <div class="rate-label">Asphalt Shingles</div>
+            <div class="rate-desc">Supply and install, standard 25yr</div>
+          </div>
+          <div class="rate-unit">$ / sqft roof</div>
+          <div class="rate-input-wrap">
+            <span class="rate-prefix">$</span>
+            <input class="rate-input" type="number" id="r-roofShingle" step="0.10" onchange="markChanged(this)">
+          </div>
+        </div>
+        <div class="rate-row">
+          <div>
+            <div class="rate-label">Steel Roofing</div>
+            <div class="rate-desc">Supply and install, exposed fastener panel</div>
+          </div>
+          <div class="rate-unit">$ / sqft roof</div>
+          <div class="rate-input-wrap">
+            <span class="rate-prefix">$</span>
+            <input class="rate-input" type="number" id="r-roofSteel" step="0.10" onchange="markChanged(this)">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── SECTION 5: CLADDING ── -->
+    <div class="rate-section">
+      <div class="rate-section-header">
+        <div class="rate-section-icon">🧱</div>
+        <div class="rate-section-title">Exterior Cladding</div>
+        <div class="rate-section-note">$ / sqft wall + gable area</div>
+      </div>
+      <div class="rate-table">
+        <div class="rate-row">
+          <div>
+            <div class="rate-label">Vinyl Siding</div>
+            <div class="rate-desc">Supply and install, standard profile</div>
+          </div>
+          <div class="rate-unit">$ / sqft wall</div>
+          <div class="rate-input-wrap">
+            <span class="rate-prefix">$</span>
+            <input class="rate-input" type="number" id="r-claddingVinyl" step="0.10" onchange="markChanged(this)">
+          </div>
+        </div>
+        <div class="rate-row">
+          <div>
+            <div class="rate-label">Metal Siding</div>
+            <div class="rate-desc">Supply and install, exposed fastener</div>
+          </div>
+          <div class="rate-unit">$ / sqft wall</div>
+          <div class="rate-input-wrap">
+            <span class="rate-prefix">$</span>
+            <input class="rate-input" type="number" id="r-claddingMetal" step="0.10" onchange="markChanged(this)">
+          </div>
+        </div>
+        <div class="rate-row">
+          <div>
+            <div class="rate-label">Stucco</div>
+            <div class="rate-desc">Supply and install, 3-coat system — sub rate</div>
+          </div>
+          <div class="rate-unit">$ / sqft wall</div>
+          <div class="rate-input-wrap">
+            <span class="rate-prefix">$</span>
+            <input class="rate-input" type="number" id="r-claddingStucco" step="0.25" onchange="markChanged(this)">
+          </div>
+        </div>
+        <div class="rate-row">
+          <div>
+            <div class="rate-label">Soffit & Fascia</div>
+            <div class="rate-desc">Supply and install, per linft of fascia run</div>
+          </div>
+          <div class="rate-unit">$ / linft</div>
+          <div class="rate-input-wrap">
+            <span class="rate-prefix">$</span>
+            <input class="rate-input" type="number" id="r-soffit" step="0.25" onchange="markChanged(this)">
+          </div>
+        </div>
+        <div class="rate-row">
+          <div>
+            <div class="rate-label">Eavestrough</div>
+            <div class="rate-desc">Supply and install, both eaves</div>
+          </div>
+          <div class="rate-unit">$ / linft</div>
+          <div class="rate-input-wrap">
+            <span class="rate-prefix">$</span>
+            <input class="rate-input" type="number" id="r-eave" step="0.25" onchange="markChanged(this)">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── SECTION 6: OPENINGS ── -->
+    <div class="rate-section">
+      <div class="rate-section-header">
+        <div class="rate-section-icon">🚪</div>
+        <div class="rate-section-title">Windows & Doors</div>
+        <div class="rate-section-note">$ per unit supply + install</div>
+      </div>
+      <div class="rate-table">
+        <div class="rate-row">
+          <div>
+            <div class="rate-label">Window (36×24)</div>
+            <div class="rate-desc">Supply and install, single pane</div>
+          </div>
+          <div class="rate-unit">$ each</div>
+          <div class="rate-input-wrap">
+            <span class="rate-prefix">$</span>
+            <input class="rate-input" type="number" id="r-winBase" step="25" onchange="markChanged(this)">
+          </div>
+        </div>
+        <div class="rate-row">
+          <div>
+            <div class="rate-label">Man Door (36×80)</div>
+            <div class="rate-desc">Supply and install, steel pre-hung</div>
+          </div>
+          <div class="rate-unit">$ each</div>
+          <div class="rate-input-wrap">
+            <span class="rate-prefix">$</span>
+            <input class="rate-input" type="number" id="r-manDoorBase" step="25" onchange="markChanged(this)">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── SECTION 7: ADD-ONS ── -->
+    <div class="rate-section">
+      <div class="rate-section-header">
+        <div class="rate-section-icon">⚡</div>
+        <div class="rate-section-title">Optional Add-Ons</div>
+        <div class="rate-section-note">Applied when selected</div>
+      </div>
+      <div class="rate-table">
+        <div class="rate-row">
+          <div>
+            <div class="rate-label">Electrical Rough-In</div>
+            <div class="rate-desc">Panel, wiring, outlets, lights</div>
+          </div>
+          <div class="rate-unit">$ / sqft floor</div>
+          <div class="rate-input-wrap">
+            <span class="rate-prefix">$</span>
+            <input class="rate-input" type="number" id="r-electrical" step="0.25" onchange="markChanged(this)">
+          </div>
+        </div>
+        <div class="rate-row">
+          <div>
+            <div class="rate-label">Heater</div>
+            <div class="rate-desc">Supply and install, forced air unit</div>
+          </div>
+          <div class="rate-unit">$ flat / job</div>
+          <div class="rate-input-wrap">
+            <span class="rate-prefix">$</span>
+            <input class="rate-input" type="number" id="r-heater" step="100" onchange="markChanged(this)">
+          </div>
+        </div>
+        <div class="rate-row">
+          <div>
+            <div class="rate-label">Insulation</div>
+            <div class="rate-desc">Batt insulation, walls + ceiling</div>
+          </div>
+          <div class="rate-unit">$ / sqft</div>
+          <div class="rate-input-wrap">
+            <span class="rate-prefix">$</span>
+            <input class="rate-input" type="number" id="r-insulation" step="0.10" onchange="markChanged(this)">
+          </div>
+        </div>
+        <div class="rate-row">
+          <div>
+            <div class="rate-label">Drywall</div>
+            <div class="rate-desc">Supply, hang, tape, mud — wall area</div>
+          </div>
+          <div class="rate-unit">$ / sqft wall</div>
+          <div class="rate-input-wrap">
+            <span class="rate-prefix">$</span>
+            <input class="rate-input" type="number" id="r-drywall" step="0.10" onchange="markChanged(this)">
+          </div>
+        </div>
+        <div class="rate-row">
+          <div>
+            <div class="rate-label">Painting</div>
+            <div class="rate-desc">2 coats, wall area</div>
+          </div>
+          <div class="rate-unit">$ / sqft wall</div>
+          <div class="rate-input-wrap">
+            <span class="rate-prefix">$</span>
+            <input class="rate-input" type="number" id="r-painting" step="0.10" onchange="markChanged(this)">
+          </div>
+        </div>
+        <div class="rate-row">
+          <div>
+            <div class="rate-label">Epoxy Floor</div>
+            <div class="rate-desc">2-part epoxy coating, floor area</div>
+          </div>
+          <div class="rate-unit">$ / sqft floor</div>
+          <div class="rate-input-wrap">
+            <span class="rate-prefix">$</span>
+            <input class="rate-input" type="number" id="r-epoxy" step="0.25" onchange="markChanged(this)">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── SECTION 8: MANAGEMENT ── -->
+    <div class="rate-section">
+      <div class="rate-section-header">
+        <div class="rate-section-icon">🔒</div>
+        <div class="rate-section-title">Margins & Tax</div>
+        <div class="rate-section-note">Hidden from client</div>
+      </div>
+      <div class="rate-table">
+        <div class="rate-row">
+          <div>
+            <div class="rate-label">Management Fee</div>
+            <div class="rate-desc">Applied to subtotal — not shown to client</div>
+          </div>
+          <div class="rate-unit">% of subtotal</div>
+          <div class="rate-input-wrap">
+            <span class="rate-prefix" style="left:unset;right:12px;transform:translateY(-50%);">%</span>
+            <input class="rate-input" type="number" id="r-mgmt" step="1" style="padding-right:28px;padding-left:12px;" onchange="markChanged(this)">
+          </div>
+        </div>
+        <div class="rate-row">
+          <div>
+            <div class="rate-label">GST</div>
+            <div class="rate-desc">Federal tax — update if rate changes</div>
+          </div>
+          <div class="rate-unit">% of total</div>
+          <div class="rate-input-wrap">
+            <span class="rate-prefix" style="left:unset;right:12px;transform:translateY(-50%);">%</span>
+            <input class="rate-input" type="number" id="r-gst" step="1" style="padding-right:28px;padding-left:12px;" onchange="markChanged(this)">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── SECTION 9: TRUSS LOOKUP ── -->
+    <div class="rate-section">
+      <div class="rate-section-header">
+        <div class="rate-section-icon">📐</div>
+        <div class="rate-section-title">Truss Pricing</div>
+        <div class="rate-section-note">By building width</div>
+      </div>
+      <table class="lookup-table">
+        <thead>
+          <tr>
+            <th>Building Width (ft)</th>
+            <th>Price per Set</th>
+            <th style="width:48px;"></th>
+          </tr>
+        </thead>
+        <tbody id="truss-tbody"></tbody>
+      </table>
+      <div class="add-row-bar">
+        <button class="add-row-btn" onclick="addTrussRow()">+ Add Size</button>
+      </div>
+    </div>
+
+    <!-- ── SECTION 10: OHD LOOKUP ── -->
+    <div class="rate-section">
+      <div class="rate-section-header">
+        <div class="rate-section-icon">🚗</div>
+        <div class="rate-section-title">Overhead Door Pricing</div>
+        <div class="rate-section-note">By width × height</div>
+      </div>
+      <table class="lookup-table">
+        <thead>
+          <tr>
+            <th>Width (ft)</th>
+            <th>Height (ft)</th>
+            <th>Price (supply + install)</th>
+            <th style="width:48px;"></th>
+          </tr>
+        </thead>
+        <tbody id="ohd-tbody"></tbody>
+      </table>
+      <div class="add-row-bar">
+        <button class="add-row-btn" onclick="addOhdRow()">+ Add Size</button>
+      </div>
+    </div>
+
+  </div><!-- /admin-body -->
+</div><!-- /admin-screen -->
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<script>
+// ── CONFIG ────────────────────────────────────────────────────────────────────
+// Change this password to whatever you want
+const ADMIN_PASSWORD = 'arkay2025';
+
+// ── DEFAULT RATES (mirrors calculator R object) ───────────────────────────────
+const DEFAULTS = {
+  generalReq:     900,
+  site:           0.50,
+  concrete4:      14.15,
+  concrete6:      17.65,
+  framingMat:     43.88,
+  framingLab:     8.89,
+  roofShingle:    5.34,
+  roofSteel:      5.80,
+  claddingVinyl:  5.29,
+  claddingMetal:  5.10,
+  claddingStucco: 12.00,
+  soffit:         13.25,
+  eave:           9.89,
+  winBase:        355,
+  manDoorBase:    850,
+  misc:           1.00,
+  electrical:     4.00,
+  heater:         3900,
+  insulation:     3.50,
+  drywall:        3.20,
+  painting:       2.80,
+  epoxy:          4.50,
+  mgmt:           10,   // stored as % in admin, converted to decimal in calc
+  gst:            5,    // stored as % in admin
+};
+
+const DEFAULT_TRUSS = [
+  [16,950],[18,1035],[20,1125],[22,1225],[24,1350],
+  [26,1500],[28,1725],[30,1950],[32,2225],[36,2700],[40,3250],[44,3775],[48,4300]
+];
+
+const DEFAULT_OHD = [
+  [8,7,1950],[8,8,2050],[9,7,2050],[9,8,2150],
+  [10,7,2100],[10,8,2250],[12,7,2350],[12,8,2550],
+  [14,7,3050],[14,8,3225],[16,7,3650],[16,8,3900],
+  [18,7,4250],[18,8,4450],[20,8,5075],[24,8,6000]
+];
+
+// ── STATE ─────────────────────────────────────────────────────────────────────
+let hasChanges = false;
+
+// ── LOGIN ─────────────────────────────────────────────────────────────────────
+function doLogin() {
+  const pw = document.getElementById('pw-input').value;
+  if (pw === ADMIN_PASSWORD) {
+    document.getElementById('login-screen').style.display = 'none';
+    document.getElementById('admin-screen').style.display = 'block';
+    loadRates();
+  } else {
+    const err = document.getElementById('login-error');
+    err.style.display = 'block';
+    document.getElementById('pw-input').value = '';
+    document.getElementById('pw-input').focus();
+    setTimeout(() => err.style.display = 'none', 3000);
+  }
+}
+
+function doLogout() {
+  if (hasChanges && !confirm('You have unsaved changes. Log out anyway?')) return;
+  document.getElementById('admin-screen').style.display = 'none';
+  document.getElementById('login-screen').style.display = 'flex';
+  document.getElementById('pw-input').value = '';
+}
+
+// ── LOAD RATES ────────────────────────────────────────────────────────────────
+function loadRates() {
+  // Load from localStorage (falls back to defaults)
+  const stored = JSON.parse(localStorage.getItem('arkay_rates') || '{}');
+  const storedTruss = JSON.parse(localStorage.getItem('arkay_truss') || 'null');
+  const storedOhd = JSON.parse(localStorage.getItem('arkay_ohd') || 'null');
+
+  const rates = Object.assign({}, DEFAULTS, stored);
+  const truss = storedTruss || DEFAULT_TRUSS;
+  const ohd   = storedOhd   || DEFAULT_OHD;
+
+  // Populate rate inputs
+  Object.keys(DEFAULTS).forEach(key => {
+    const el = document.getElementById('r-' + key);
+    if (el) el.value = rates[key];
+  });
+
+  // Build truss table
+  renderTrussTable(truss);
+
+  // Build OHD table
+  renderOhdTable(ohd);
+
+  setSaveStatus('All changes saved', '');
+  hasChanges = false;
+}
+
+// ── MARK CHANGED ──────────────────────────────────────────────────────────────
+function markChanged(el) {
+  el.classList.add('changed');
+  hasChanges = true;
+  setSaveStatus('Unsaved changes', 'saving');
+}
+
+function markLookupChanged(el) {
+  el.classList.add('changed');
+  hasChanges = true;
+  setSaveStatus('Unsaved changes', 'saving');
+}
+
+// ── SAVE RATES ────────────────────────────────────────────────────────────────
+function saveRates() {
+  const btn = document.getElementById('save-btn');
+  btn.disabled = true;
+  btn.textContent = 'Saving...';
+
+  try {
+    // Collect rate inputs
+    const rates = {};
+    Object.keys(DEFAULTS).forEach(key => {
+      const el = document.getElementById('r-' + key);
+      if (el) rates[key] = parseFloat(el.value) || 0;
+    });
+
+    // Collect truss from DOM
+    const truss = collectTrussRows();
+
+    // Collect OHD from DOM
+    const ohd = collectOhdRows();
+
+    // Save to localStorage
+    localStorage.setItem('arkay_rates', JSON.stringify(rates));
+    localStorage.setItem('arkay_truss', JSON.stringify(truss));
+    localStorage.setItem('arkay_ohd', JSON.stringify(ohd));
+
+    // Clear changed highlights
+    document.querySelectorAll('.changed').forEach(el => el.classList.remove('changed'));
+
+    hasChanges = false;
+    setSaveStatus('All changes saved', 'saved');
+    showToast('Rates saved successfully', 'success');
+
+  } catch(e) {
+    setSaveStatus('Save failed', 'error');
+    showToast('Save failed — ' + e.message, 'error');
+  }
+
+  btn.disabled = false;
+  btn.textContent = 'Save Changes';
+}
+
+// ── TRUSS TABLE ──────────────────────────────────────────────────────────────
+function renderTrussTable(data) {
+  const tbody = document.getElementById('truss-tbody');
+  tbody.innerHTML = '';
+  data.forEach((row, i) => {
+    const [span, price] = row;
+    const tr = document.createElement('tr');
+    tr.dataset.idx = i;
+    tr.innerHTML = `
+      <td>
+        <div class="lookup-input-wrap">
+          <input class="lookup-input" type="number" data-truss-span="${i}" value="${span}" step="2" placeholder="ft" style="padding-left:10px;" onchange="markLookupChanged(this)">
+        </div>
+      </td>
+      <td>
+        <div class="lookup-input-wrap">
+          <span class="lookup-prefix">$</span>
+          <input class="lookup-input" type="number" data-truss-price="${i}" value="${price}" step="25" onchange="markLookupChanged(this)">
+        </div>
+      </td>
+      <td class="actions">
+        <button class="remove-btn" onclick="removeTrussRow(this)" title="Remove">×</button>
+      </td>`;
+    tbody.appendChild(tr);
+  });
+}
+
+function collectTrussRows() {
+  const rows = [];
+  document.querySelectorAll('#truss-tbody tr').forEach(tr => {
+    const spanEl  = tr.querySelector('[data-truss-span]');
+    const priceEl = tr.querySelector('[data-truss-price]');
+    if (spanEl && priceEl) {
+      const span  = parseFloat(spanEl.value) || 0;
+      const price = parseFloat(priceEl.value) || 0;
+      if (span > 0) rows.push([span, price]);
+    }
+  });
+  return rows.sort((a, b) => a[0] - b[0]);
+}
+
+function addTrussRow() {
+  const rows = collectTrussRows();
+  rows.push([0, 0]);
+  renderTrussTable(rows);
+  // Focus the new span input
+  const allSpans = document.querySelectorAll('[data-truss-span]');
+  const last = allSpans[allSpans.length - 1];
+  if (last) {
+    last.classList.add('new-row');
+    last.focus();
+  }
+  hasChanges = true;
+  setSaveStatus('Unsaved changes', 'saving');
+}
+
+function removeTrussRow(btn) {
+  const tr = btn.closest('tr');
+  if (document.querySelectorAll('#truss-tbody tr').length <= 1) {
+    showToast('Need at least one truss row', 'error');
+    return;
+  }
+  tr.style.opacity = '0';
+  tr.style.transition = 'opacity 0.2s';
+  setTimeout(() => {
+    tr.remove();
+    reindexTruss();
+    hasChanges = true;
+    setSaveStatus('Unsaved changes', 'saving');
+  }, 200);
+}
+
+function reindexTruss() {
+  document.querySelectorAll('#truss-tbody tr').forEach((tr, i) => {
+    const spanEl  = tr.querySelector('[data-truss-span]');
+    const priceEl = tr.querySelector('[data-truss-price]');
+    if (spanEl)  spanEl.dataset.trussSpan  = i;
+    if (priceEl) priceEl.dataset.trussPrice = i;
+  });
+}
+
+// ── OHD TABLE ─────────────────────────────────────────────────────────────────
+function renderOhdTable(data) {
+  const tbody = document.getElementById('ohd-tbody');
+  tbody.innerHTML = '';
+  data.forEach((row, i) => {
+    const [w, h, price] = row;
+    const tr = document.createElement('tr');
+    tr.dataset.idx = i;
+    tr.innerHTML = `
+      <td>
+        <div class="lookup-input-wrap">
+          <input class="lookup-input" type="number" data-ohd-w="${i}" value="${w}" step="1" placeholder="ft" style="padding-left:10px;" onchange="markLookupChanged(this)">
+        </div>
+      </td>
+      <td>
+        <div class="lookup-input-wrap">
+          <input class="lookup-input" type="number" data-ohd-h="${i}" value="${h}" step="1" placeholder="ft" style="padding-left:10px;" onchange="markLookupChanged(this)">
+        </div>
+      </td>
+      <td>
+        <div class="lookup-input-wrap">
+          <span class="lookup-prefix">$</span>
+          <input class="lookup-input" type="number" data-ohd-price="${i}" value="${price}" step="50" onchange="markLookupChanged(this)">
+        </div>
+      </td>
+      <td class="actions">
+        <button class="remove-btn" onclick="removeOhdRow(this)" title="Remove">×</button>
+      </td>`;
+    tbody.appendChild(tr);
+  });
+}
+
+function collectOhdRows() {
+  const rows = [];
+  document.querySelectorAll('#ohd-tbody tr').forEach(tr => {
+    const wEl     = tr.querySelector('[data-ohd-w]');
+    const hEl     = tr.querySelector('[data-ohd-h]');
+    const priceEl = tr.querySelector('[data-ohd-price]');
+    if (wEl && hEl && priceEl) {
+      const w     = parseFloat(wEl.value) || 0;
+      const h     = parseFloat(hEl.value) || 0;
+      const price = parseFloat(priceEl.value) || 0;
+      if (w > 0 && h > 0) rows.push([w, h, price]);
+    }
+  });
+  return rows.sort((a, b) => (a[0]*100+a[1]) - (b[0]*100+b[1]));
+}
+
+function addOhdRow() {
+  const rows = collectOhdRows();
+  rows.push([0, 0, 0]);
+  renderOhdTable(rows);
+  // Focus first input of new row
+  const allW = document.querySelectorAll('[data-ohd-w]');
+  const last = allW[allW.length - 1];
+  if (last) {
+    last.classList.add('new-row');
+    last.focus();
+  }
+  hasChanges = true;
+  setSaveStatus('Unsaved changes', 'saving');
+}
+
+function removeOhdRow(btn) {
+  const tr = btn.closest('tr');
+  if (document.querySelectorAll('#ohd-tbody tr').length <= 1) {
+    showToast('Need at least one door size', 'error');
+    return;
+  }
+  tr.style.opacity = '0';
+  tr.style.transition = 'opacity 0.2s';
+  setTimeout(() => {
+    tr.remove();
+    hasChanges = true;
+    setSaveStatus('Unsaved changes', 'saving');
+  }, 200);
+}
+
+// ── UI HELPERS ────────────────────────────────────────────────────────────────
+function setSaveStatus(msg, cls) {
+  const el = document.getElementById('save-status');
+  el.textContent = msg;
+  el.className = 'save-status ' + cls;
+}
+
+function showToast(msg, type) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast ' + type;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+// ── WARN ON UNSAVED CHANGES ───────────────────────────────────────────────────
+window.addEventListener('beforeunload', e => {
+  if (hasChanges) {
+    e.preventDefault();
+    e.returnValue = '';
+  }
+});
+
+// ── ENTER KEY ON LOGIN ────────────────────────────────────────────────────────
+document.getElementById('pw-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter') doLogin();
+});
+</script>
+</body>
+</html>
